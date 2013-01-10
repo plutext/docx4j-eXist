@@ -276,8 +276,15 @@ public class ExistUnzippedPartStore implements PartStore {
 	
 	}
 	
-	public void saveJaxbXmlPart(JaxbXmlPart part, String partName) throws Docx4JException {
+	public void saveJaxbXmlPart(JaxbXmlPart part) throws Docx4JException {
 
+		String partName;
+		if (part.getPartName().getName().equals("_rels/.rels")) {
+			partName = part.getPartName().getName();			
+		} else {
+			partName = part.getPartName().getName().substring(1);						
+		}
+		
 		String partPrefix="";
 		String resource; 
 		int pos = partName.lastIndexOf("/");
@@ -309,7 +316,7 @@ public class ExistUnzippedPartStore implements PartStore {
 	        			&& this.sourcePartStore==null) {
 	        		throw new Docx4JException("part store has changed, and sourcePartStore not set");
 	        	} else {
-	        		InputStream is = sourcePartStore.loadPart(part.getPartName().getName().substring(1));
+	        		InputStream is = sourcePartStore.loadPart(partName);
 	        		
 					ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
 	        		
@@ -336,7 +343,9 @@ public class ExistUnzippedPartStore implements PartStore {
 		}
 	}
 	
-	public void saveCustomXmlDataStoragePart(CustomXmlDataStoragePart part, String partName) throws Docx4JException {
+	public void saveCustomXmlDataStoragePart(CustomXmlDataStoragePart part) throws Docx4JException {
+		
+		String partName = part.getPartName().getName().substring(1);
 		
 		String partPrefix="";
 		String resource; 
@@ -366,8 +375,10 @@ public class ExistUnzippedPartStore implements PartStore {
 		}
 	}
 	
-	public void saveXmlPart(XmlPart part, String partName) throws Docx4JException {
+	public void saveXmlPart(XmlPart part) throws Docx4JException {
 	
+		String partName = part.getPartName().getName().substring(1);
+		
 		String partPrefix="";
 		String resource; 
 		int pos = partName.lastIndexOf("/");
@@ -412,10 +423,10 @@ public class ExistUnzippedPartStore implements PartStore {
 	}
 	
 	public void saveBinaryPart(Part part) throws Docx4JException {
-
 		
 		// Drop the leading '/'
 		String partName = part.getPartName().getName().substring(1);
+		
 		String partPrefix="";
 		String resource; 
 		int pos = partName.lastIndexOf("/");

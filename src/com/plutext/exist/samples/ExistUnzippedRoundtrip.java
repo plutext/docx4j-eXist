@@ -63,7 +63,7 @@ public class ExistUnzippedRoundtrip extends AbstractSample {
 		OpcPackage opc = loader.get();
 		
 		// Save it
-		ExistUnzippedPartStore zps = new ExistUnzippedPartStore("/db/OUT/sample-docx3", "admin", "");
+		ExistUnzippedPartStore zps = new ExistUnzippedPartStore("/db/OUT/sample-docx4", "admin", "");
 		zps.setSourcePartStore(opc.getPartStore());
 		
 		Save saver = new Save(opc, zps);
