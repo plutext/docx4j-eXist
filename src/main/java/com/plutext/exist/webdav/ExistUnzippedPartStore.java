@@ -17,34 +17,20 @@
     limitations under the License.
 
  */
-package com.plutext.exist;
+package com.plutext.exist.webdav;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.Serializable;
 import java.io.StringWriter;
 import java.net.URLEncoder;
-import java.nio.ByteBuffer;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
-import java.util.zip.ZipOutputStream;
+import java.util.List;
 
-import javax.xml.bind.JAXBException;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
+import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
@@ -52,42 +38,42 @@ import org.apache.log4j.Logger;
 import org.docx4j.XmlUtils;
 import org.docx4j.openpackaging.contenttype.ContentTypeManager;
 import org.docx4j.openpackaging.exceptions.Docx4JException;
-import org.docx4j.openpackaging.io3.Load3;
 import org.docx4j.openpackaging.io3.stores.PartStore;
-import org.docx4j.openpackaging.io3.stores.ZipPartStore.ByteArray;
 import org.docx4j.openpackaging.parts.CustomXmlDataStoragePart;
 import org.docx4j.openpackaging.parts.JaxbXmlPart;
 import org.docx4j.openpackaging.parts.Part;
 import org.docx4j.openpackaging.parts.XmlPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.BinaryPart;
+import org.exist.xmldb.EXistResource;
+import org.exist.xmldb.RemoteBinaryResource;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
+import org.xmldb.api.DatabaseManager;
+import org.xmldb.api.base.Collection;
+import org.xmldb.api.base.Database;
+import org.xmldb.api.base.Resource;
+import org.xmldb.api.base.XMLDBException;
+import org.xmldb.api.modules.CollectionManagementService;
+import org.xmldb.api.modules.XMLResource;
 
-
-import org.xmldb.api.base.*; 
-import org.xmldb.api.modules.*; 
-import org.xmldb.api.*; 
-import javax.xml.transform.OutputKeys; 
-import org.exist.xmldb.EXistResource; 
-import org.exist.xmldb.RemoteBinaryResource;
+import com.googlecode.sardine.DavResource;
+import com.googlecode.sardine.Sardine;
+import com.googlecode.sardine.SardineFactory;
 
 /**
- * Load an unzipped package from the file system;
- * save it to some output stream.
- * 
- * TODO convert path sep in part name to suit
- * underlying file system.
+ * TODO: use WebDAV for the save part
  * 
  * @author jharrop
- * @since 3.0
  */
 public class ExistUnzippedPartStore implements PartStore {
 	
 	private static Logger log = Logger.getLogger(ExistUnzippedPartStore.class);
 	
-	private static String URI = "xmldb:exist://localhost:8080/exist/xmlrpc";
+	private static String URI = "http://localhost:8080/exist/webdav";
 		
 	String docxColl;  // eg "/db/docx4/apple"
+	
+	Sardine sardine;
 	
 	String user;
 	String password;
@@ -95,17 +81,11 @@ public class ExistUnzippedPartStore implements PartStore {
 	public ExistUnzippedPartStore(String docxColl, String user, String password) throws Docx4JException {
 		
 		this.docxColl = docxColl;
-		this.user = user;
-		this.password = password;
-
-		final String driver = "org.exist.xmldb.DatabaseImpl"; 
 		
 		try { 
-			// initialize database driver
-			Class cl = Class.forName(driver);
-			Database database = (Database) cl.newInstance();
-			database.setProperty("create-database", "true");
-			DatabaseManager.registerDatabase(database);
+			sardine = SardineFactory.begin();
+			sardine.setCredentials(user, password);
+			
 		} catch (Exception e) {
 			throw new Docx4JException(e.getMessage(), e);
 		} 
@@ -124,7 +104,7 @@ public class ExistUnzippedPartStore implements PartStore {
 	
 	/////// Load methods
 
-	public boolean partExists(String partName) {
+	public boolean partExists(String partName) throws Docx4JException {
 		
 		String partPrefix="";
 		String resource; 
@@ -138,45 +118,22 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(URI + docxColl + partPrefix);
 		//String urlEncoded = URLEncoder.encode(URI + docxColl + partPrefix);
 		System.out.println(resource);
+		
+		String url = URI + docxColl + partPrefix + "/" + URLEncoder.encode(partName);
+//		String url = URI + docxColl + partPrefix + "/" + partName;
+		System.out.println(url);
 				
-		Collection col = null;
-		Resource res = null;
 		try { // get the collection
-			col = DatabaseManager.getCollection(URI + docxColl + partPrefix, user, password);
-			
-			if (col==null) {
-				log.debug("No col: " + URI + docxColl + partPrefix);
-				return false;
-			}
-			
-			col.setProperty(OutputKeys.INDENT, "no");
-			
-			res = col.getResource(resource);
-			return (res != null);
-		} catch (XMLDBException e) {
-			// TODO Auto-generated catch block
-			System.out.println("error getCollection:" + URI + docxColl + partPrefix);
-			e.printStackTrace();
-			return false;
-		} finally { // dont forget to clean up!
-			if (res != null) {
-				try {
-					((EXistResource) res).freeResources();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
-			if (col != null) {
-				try {
-					col.close();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
-		}
+			return sardine.exists(url);
+		} catch (javax.net.ssl.SSLPeerUnverifiedException e) {
+			// eg if using https
+			throw new Docx4JException(e.getMessage(), e);
+		} catch (IOException e) {
+			throw new Docx4JException(e.getMessage(), e);
+		} 
 	}
 	
-	public InputStream loadPart(String partName) throws IOException {
+	public InputStream loadPart(String partName) throws Docx4JException {
 		
 		String partPrefix="";
 		String resource; 
@@ -185,64 +142,32 @@ public class ExistUnzippedPartStore implements PartStore {
 			partPrefix = "/" + partName.substring(0, pos);
 			resource = partName.substring(pos+1);
 		} else {
-			resource = URLEncoder.encode(partName);
+			resource = partName;
 		}
 		System.out.println(URI + docxColl + partPrefix);
 		System.out.println(resource);
-				
-		Collection col = null;
-		Resource res = null;
-		try { // get the collection
-			col = DatabaseManager.getCollection(URI + docxColl + partPrefix, user, password);
-			col.setProperty(OutputKeys.INDENT, "no");
-			
-			res = col.getResource(resource);
-			
-			// The XML DB API doesn't give you a way 
-			// to stream a resource?!
-			
-			if (res==null) {
-
-				log.error(resource + " doesn't exist!" );
-				return null;
-			
-			} else if (res instanceof XMLResource) {
-				Node n = ((XMLResource)res).getContentAsDOM();
-				DOMSource source = new DOMSource(n);  
-				StringWriter xmlAsWriter = new StringWriter();  
-				  
-				StreamResult result = new StreamResult(xmlAsWriter);  
-				  
-				TransformerFactory.newInstance().newTransformer().transform(source, result);  
-				  
-				// write changes  
-				return new ByteArrayInputStream(xmlAsWriter.toString().getBytes("UTF-8")); 
-			} else if (res instanceof RemoteBinaryResource) {
-				return ((RemoteBinaryResource)res).getStreamContent();
-			}else {
-				log.error("Handle " + res.getClass().getName() );
-				return null;
-			}
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return null;
-		} finally { // dont forget to clean up!
-			if (res != null) {
-				try {
-					((EXistResource) res).freeResources();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
-			if (col != null) {
-				try {
-					col.close();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
+		
+		// Workaround for bug in eXist 2.0 RC2
+		if (resource.equals("[Content_Types].xml")) {
+			resource = URLEncoder.encode(resource);
 		}
+				
+		String url = URI + docxColl + partPrefix + "/" + URLEncoder.encode(resource);
+//		String url = URI + docxColl + partPrefix + "/" + partName;
+		System.out.println(url);
+		try { 			
+			return sardine.get(url);
+		} catch (com.googlecode.sardine.impl.SardineException e) {
+			if (e.getStatusCode()==404) {
+				return null;
+			} else {
+				throw new Docx4JException(e.getMessage(), e);				
+			}
+		} catch (javax.net.ssl.SSLPeerUnverifiedException e) {
+			throw new Docx4JException(e.getMessage(), e);
+		} catch (IOException e) {
+			throw new Docx4JException(e.getMessage(), e);
+		} 
 		
 		
 	}
