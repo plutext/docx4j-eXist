@@ -21,7 +21,8 @@ Saving/Loading the unzipped docx is demonstrated via the following APIs:
 
 - CMIS: It would be nice to demonstrate via CMIS, but eXist does not support that.
 
-- REST: looks like this could be done.  See http://exist-db.org/exist/apps/doc/devguide_rest.xml
+- REST: See http://exist-db.org/exist/apps/doc/devguide_rest.xml
+  Implementation is very similar to WebDAV; also uses Sardine
 
 
 STORING DOCUMENTS UNZIPPED IN EXIST
@@ -51,11 +52,13 @@ WebDAV
 - Load and Save both work
 - but note http://exist.2174344.n4.nabble.com/RC2-s-WebDAV-404-s-on-character-td4657976.html
 
+REST
+- Load and Save both work
+- very similar to WebDAV, but no need to create collections, and note handling of [Content_Types].xml
+
 XML:DB
 - Load and Save both work
 - xmldb/ExistUnzippedPartStore.java writes %5BContent_Types%5D.xml which is what we want...
-
-
 
 
 

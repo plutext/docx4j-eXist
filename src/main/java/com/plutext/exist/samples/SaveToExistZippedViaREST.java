@@ -21,29 +21,29 @@
 package com.plutext.exist.samples;
 
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 
-import org.docx4j.openpackaging.io3.Load3;
 import org.docx4j.openpackaging.io3.Save;
-import org.docx4j.openpackaging.io3.stores.PartStore;
 import org.docx4j.openpackaging.packages.OpcPackage;
 import org.docx4j.samples.AbstractSample;
 
+import com.github.sardine.impl.SardineImpl;
+
 
 /**
- * Example of saving a package to eXist unzipped,
- * by WebDAV, REST or XML:DB
- * 
- * WebDAV and REST are very similar
+ * Example of saving a package to eXist zipped up as a binary blob,
+ * using eXist's REST interface
  * 
  * @author jharrop
  * @since 3.0
  *
  */
-public class SaveToExistUnzipped extends AbstractSample {
+public class SaveToExistZippedViaREST extends AbstractSample {
 	
 	public static void main(String[] args) throws Exception {
 
+		// Load the docx from somewhere
 		try {
 			getInputFilePath(args);
 		} catch (IllegalArgumentException e) {
@@ -59,34 +59,30 @@ public class SaveToExistUnzipped extends AbstractSample {
 //		final Load3 loader = new Load3(partLoader);
 //		OpcPackage opc = loader.get();
 		
+		// Now we have an OpcPackage...
+		
 		// Save it
+		String url = "http://localhost:8080/exist/rest/db/logdocx/ti.docx";
 		long start = System.currentTimeMillis();
 
-		// uncomment to use xmldb
-//		com.plutext.exist.xmldb.ExistUnzippedPartStore zps 
-//			= new com.plutext.exist.xmldb.ExistUnzippedPartStore(
-//					"/db/logdocx/te", "admin", "");
 		
-		// uncomment to use WebDAV
-//		com.plutext.exist.webdav.ExistUnzippedPartStore zps 
-//			= new com.plutext.exist.webdav.ExistUnzippedPartStore(
-//					"/db/logdocx/t8", "admin", "");
-
-		// uncomment to use REST
-		com.plutext.exist.rest.ExistUnzippedPartStore zps 
-			= new com.plutext.exist.rest.ExistUnzippedPartStore(
-					"/db/logdocx/tk", "admin", "");
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(); 		
+		Save saver = new Save(opc); 
+		saver.save(baos);
 		
-		zps.setSourcePartStore(opc.getPartStore());
+		// Sardine gives us a convenient way to use
+		// org.apache.http.client.methods.HttpPut
 		
-		Save saver = new Save(opc, zps);
-		saver.save(null);
-		
+		SardineImpl sardine = new SardineImpl();
+		sardine.setCredentials("admin", "");		
+		sardine.put(url, baos.toByteArray());
+		sardine.shutdown();		
+				
 		long elapsed = System.currentTimeMillis() - start;
 		System.out.println(elapsed);
 		
 		
 	}
-		
+	
 
 }

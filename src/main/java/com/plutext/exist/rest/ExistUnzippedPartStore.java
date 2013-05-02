@@ -17,7 +17,7 @@
     limitations under the License.
 
  */
-package com.plutext.exist.webdav;
+package com.plutext.exist.rest;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -25,8 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.List;
 
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
@@ -43,13 +41,16 @@ import org.docx4j.openpackaging.parts.XmlPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.BinaryPart;
 import org.w3c.dom.Document;
 
-import com.github.sardine.Sardine;
-import com.github.sardine.SardineFactory;
 import com.github.sardine.impl.SardineException;
+import com.github.sardine.impl.SardineImpl;
 
 /**
  * Save/load docx/pptx/xlsx unzipped/exploded
- * in eXist, via WebDAV interface.
+ * in eXist, via REST interface
+ * 
+ * This is very similar to via WebDAV,
+ * except that we don't have to create
+ * collections; that's done automatically
  * 
  * @author jharrop
  */
@@ -57,11 +58,11 @@ public class ExistUnzippedPartStore implements PartStore {
 	
 	private static Logger log = Logger.getLogger(ExistUnzippedPartStore.class);
 	
-	private static String URI = "http://localhost:8080/exist/webdav";
+	private static String URI = "http://localhost:8080/exist/rest";
 		
 	String docxColl;  // eg "/db/docx4/apple"
 	
-	Sardine sardine;
+	SardineImpl sardine;
 	
 	String user;
 	String password;
@@ -71,7 +72,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		this.docxColl = docxColl;
 		
 		try { 
-			sardine = SardineFactory.begin();
+			sardine = new SardineImpl();
 			sardine.setCredentials(user, password);
 			
 		} catch (Exception e) {
@@ -138,7 +139,8 @@ public class ExistUnzippedPartStore implements PartStore {
 		
 		// Workaround for bug in eXist 2.0 RC2
 		if (resource.equals("[Content_Types].xml")) {
-			resource = URLEncoder.encode(resource);
+			resource =   URLEncoder.encode(resource);
+			// again below below...
 		}
 				
 		String url = URI + docxColl + partPrefix + "/" + URLEncoder.encode(resource);
@@ -186,10 +188,8 @@ public class ExistUnzippedPartStore implements PartStore {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
 	        ctm.marshal(baos);
 	        
-	        // Double-encode to work around a bug in eXist
 	        String url = URI + docxColl + "/" 
-	        		+ URLEncoder.encode(
-	        				URLEncoder.encode("[Content_Types].xml"));
+	        				+ URLEncoder.encode("[Content_Types].xml");
 	        System.out.println(url);
 			sardine.put(url, baos.toByteArray());
 	        
@@ -199,22 +199,6 @@ public class ExistUnzippedPartStore implements PartStore {
 	
 	}
 	
-	/**
-	 * Keep a record of directories we've created, so we don't
-	 * have to check whether it exists via HEAD request, nor
-	 * risk a 405 by doing MKCOL when it already exists. 
-	 */
-	private List<String> dirsMade = new ArrayList<String>();
-	
-	public void ensureCollection(String url) throws IOException {
-		
-		if (dirsMade.contains(url)) {
-			return;
-		} else {
-			sardine.createDirectory(url);
-			dirsMade.add(url);
-		}
-	}
 	
 	public void saveJaxbXmlPart(JaxbXmlPart part) throws Docx4JException {
 
@@ -239,8 +223,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		
 		
 		try {
-			// Ensure partPrefix collection exists
-			ensureCollection(URI + docxColl + partPrefix);
+			// (No need to ensure partPrefix collection exists when using REST)
 
 			if (part.isUnmarshalled() ) {
 			
@@ -297,8 +280,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(resource);
 		
 		try {
-			// Ensure partPrefix collection exists
-			ensureCollection(URI + docxColl + partPrefix);			
+			// (No need to ensure partPrefix collection exists when using REST)
 			
 			ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
 	        part.getData().writeDocument( baos );
@@ -327,8 +309,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(resource);
 		
 		try {
-			// Ensure partPrefix collection exists
-			ensureCollection(URI + docxColl + partPrefix);
+			// (No need to ensure partPrefix collection exists when using REST)
 
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
 			Document doc = part.getDocument();
@@ -377,8 +358,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		
 
 		try {
-			// Ensure partPrefix collection exists
-			ensureCollection(URI + docxColl + partPrefix);
+			// (No need to ensure partPrefix collection exists when using REST)
 	        	        
 	        if (((BinaryPart)part).isLoaded() ) {
 			

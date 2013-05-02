@@ -21,18 +21,20 @@
 package com.plutext.exist.samples;
 
 
-import java.io.InputStream;
-
+import org.docx4j.openpackaging.exceptions.Docx4JException;
 import org.docx4j.openpackaging.packages.OpcPackage;
 import org.docx4j.samples.AbstractSample;
-
-import com.github.sardine.Sardine;
-import com.github.sardine.SardineFactory;
+import org.exist.xmldb.EXistResource;
+import org.exist.xmldb.RemoteBinaryResource;
+import org.xmldb.api.DatabaseManager;
+import org.xmldb.api.base.Collection;
+import org.xmldb.api.base.Database;
+import org.xmldb.api.base.Resource;
 
 
 /**
  * Example of loading a package from eXist stored zipped up as a binary blob,
- * using WebDAV
+ * using XML:DB
  * 
  * @author jharrop
  * @since 3.0
@@ -43,18 +45,38 @@ public class LoadFromExistZippedViaXMLDB extends AbstractSample {
 	public static void main(String[] args) throws Exception {
 
 		// Load the docx from URL
-		String url = "http://localhost:8080/exist/webdav/db/logdocx/tf.docx";
+		String colStr = "xmldb:exist://localhost:8080/exist/xmlrpc/db/logdocx";
+		String resource = "th.docx";
 		
 		long start = System.currentTimeMillis();
 				
-		Sardine sardine = SardineFactory.begin();
-		sardine.setCredentials("admin", "");		
-		InputStream is = sardine.get(url);
+		String user = "admin";
+		String password = "";
+
+		final String driver = "org.exist.xmldb.DatabaseImpl"; 
 		
-		OpcPackage opc = OpcPackage.load(is) ;
+		try { 
+			// initialize database driver
+			Class cl = Class.forName(driver);
+			Database database = (Database) cl.newInstance();
+			database.setProperty("create-database", "true");
+			DatabaseManager.registerDatabase(database);
+		} catch (Exception e) {
+			throw new Docx4JException(e.getMessage(), e);
+		} 
+		
+		// For simplicity, here we assume the collection exists
+		Collection col = DatabaseManager.getCollection(colStr, user, password);
+		Resource res = col.getResource(resource);
+		// .. and that the resource really is a RemoteBinaryResource
+		OpcPackage opc = OpcPackage.load(
+				((RemoteBinaryResource)res).getStreamContent()) ;
+
 		System.out.println(opc.getClass().getName());
 		
-		sardine.shutdown();
+		// Cleanup
+		((EXistResource) res).freeResources();
+		col.close();
 				
 		long elapsed = System.currentTimeMillis() - start;
 		System.out.println(elapsed);

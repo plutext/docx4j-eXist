@@ -26,8 +26,7 @@ import java.io.InputStream;
 import org.docx4j.openpackaging.packages.OpcPackage;
 import org.docx4j.samples.AbstractSample;
 
-import com.github.sardine.Sardine;
-import com.github.sardine.SardineFactory;
+import com.github.sardine.impl.SardineImpl;
 
 
 /**
@@ -38,16 +37,19 @@ import com.github.sardine.SardineFactory;
  * @since 3.0
  *
  */
-public class LoadFromExistZippedViaWebDAV extends AbstractSample {
+public class LoadFromExistZippedViaREST extends AbstractSample {
 	
 	public static void main(String[] args) throws Exception {
 
 		// Load the docx from URL
-		String url = "http://localhost:8080/exist/webdav/db/logdocx/tf.docx";
+		String url = "http://localhost:8080/exist/rest/db/logdocx/tf.docx";
 		
 		long start = System.currentTimeMillis();
 				
-		Sardine sardine = SardineFactory.begin();
+		// SardineImpl gives us a convenient way to use
+		// org.apache.http.client.methods.HttpGet
+		
+		SardineImpl sardine = new SardineImpl();
 		sardine.setCredentials("admin", "");		
 		InputStream is = sardine.get(url);
 		
