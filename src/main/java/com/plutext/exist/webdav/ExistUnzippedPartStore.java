@@ -159,6 +159,13 @@ public class ExistUnzippedPartStore implements PartStore {
 		
 		
 	}
+	
+	@Override
+	public void finishLoad() throws Docx4JException {
+		// TODO Auto-generated method stub
+		
+	}
+	
 
 	///// Save methods
 	
@@ -427,6 +434,7 @@ public class ExistUnzippedPartStore implements PartStore {
 	public void finishSave() throws Docx4JException {
 		// Nothing to do
 	}
+
 
 	
 }

@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<collection xmlns="http://exist-db.org/collection-config/1.0">
+  <triggers>
+    <trigger event="create" class="org.exist.collections.triggers.XQueryTrigger">
+      <parameter name="query" value="
+                module namespace trigger='http://exist-db.org/xquery/trigger';
+                
+                import module namespace unzip = 'http://joewiz.org/ns/xquery/unzip';
+                import module namespace functx = 'http://www.functx.com';
+                import module namespace xmldb = 'http://exist-db.org/xquery/xmldb'; 
+                                
+                declare function trigger:after-create-document($zip-file as xs:anyURI) {
+                    let $target-collection := functx:substring-before-last($zip-file, '.')
+                    let $parent-collection := functx:substring-before-last($zip-file, '/')
+                    let $file-name := functx:substring-after-last($zip-file, '/')
+                    
+                    return              
+                      unzip:unzip($zip-file, $target-collection)                    
+                };"
+            />
+    </trigger>
+  </triggers>
+</collection>

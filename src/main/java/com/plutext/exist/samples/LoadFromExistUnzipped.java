@@ -21,10 +21,12 @@
 package com.plutext.exist.samples;
 
 
+import org.docx4j.XmlUtils;
 import org.docx4j.openpackaging.io3.Load3;
 import org.docx4j.openpackaging.io3.Save;
 import org.docx4j.openpackaging.io3.stores.PartStore;
 import org.docx4j.openpackaging.packages.OpcPackage;
+import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
 import org.docx4j.samples.AbstractSample;
 
 
@@ -35,7 +37,7 @@ import org.docx4j.samples.AbstractSample;
  * @since 3.0
  *
  */
-public class ExistUnzippedRoundtrip extends AbstractSample {
+public class LoadFromExistUnzipped extends AbstractSample {
 	
 	public static void main(String[] args) throws Exception {
 
@@ -47,10 +49,16 @@ public class ExistUnzippedRoundtrip extends AbstractSample {
 		
 		// Load the docx
 		PartStore partLoader 
-//			= new com.plutext.exist.xmldb.ExistUnzippedPartStore("/db/zip1/report3", "admin", "admin");
-			= new com.plutext.exist.webdav.ExistUnzippedPartStore("/db/zip1/report3", "admin", "admin");
+//			= new com.plutext.exist.xmldb.ExistUnzippedPartStore("/db/logdocx/t8", "admin", "");
+			= new com.plutext.exist.webdav.ExistUnzippedPartStore("/db/logdocx/t8", "admin", "");
 		final Load3 loader = new Load3(partLoader);
 		OpcPackage opc = loader.get();
+		
+		System.out.println(
+			XmlUtils.marshaltoString(
+					((WordprocessingMLPackage)opc).getMainDocumentPart().getJaxbElement(),
+					true, true)
+				);
 		
 //		// Save it
 //		ExistUnzippedPartStore zps = new ExistUnzippedPartStore("/db/OUT/sample-docx4", "admin", "");

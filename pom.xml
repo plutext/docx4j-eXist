@@ -55,6 +55,15 @@
 		</plugins>
 	</build>
 	
+  <repositories>
+     <repository>
+        <id>sardine-google-svn-repo</id>
+        <snapshots> <enabled>true</enabled> </snapshots>
+        <name>Sardine maven repo at Google Code</name>
+        <url>http://sardine.googlecode.com/svn/maven/</url>
+     </repository>
+  </repositories>
+  	
 	<dependencies>
 	
 		<dependency>
@@ -87,6 +96,19 @@
 			<version>3.0.0-SNAPSHOT</version>  
 		</dependency>
 
+	    <dependency>
+			<groupId>com.github.lookfirst</groupId>
+			<artifactId>sardine</artifactId>
+			<version>5.0-SNAPSHOT</version>
+		</dependency>
+
+		<!--  Sardine needs org/slf4j/LoggerFactory -->    
+		<dependency>
+		    <groupId>org.slf4j</groupId>
+		    <artifactId>slf4j-log4j12</artifactId>
+		    <version>1.7.2</version>
+		</dependency>
+    
 	</dependencies>
 	
 </project>

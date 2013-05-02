@@ -27,6 +27,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringWriter;
 import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerFactory;
@@ -93,6 +95,9 @@ public class ExistUnzippedPartStore implements PartStore {
 	}
 
 	private PartStore sourcePartStore;	
+	
+	private Map<String, Collection> knownCollections = new HashMap<String, Collection>();
+	
 
 	/**
 	 * Set this if its different to the target part store
@@ -122,7 +127,13 @@ public class ExistUnzippedPartStore implements PartStore {
 		Collection col = null;
 		Resource res = null;
 		try { // get the collection
-			col = DatabaseManager.getCollection(URI + docxColl + partPrefix, user, password);
+			col = knownCollections.get(URI + docxColl + partPrefix);
+			if (col==null) {
+				col = DatabaseManager.getCollection(URI + docxColl + partPrefix, user, password);
+				if (col!=null) {
+					knownCollections.put(URI + docxColl + partPrefix, col);
+				}
+			}
 			
 			if (col==null) {
 				log.debug("No col: " + URI + docxColl + partPrefix);
@@ -146,13 +157,13 @@ public class ExistUnzippedPartStore implements PartStore {
 					xe.printStackTrace();
 				}
 			}
-			if (col != null) {
-				try {
-					col.close();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
+//			if (col != null) {
+//				try {
+//					col.close();
+//				} catch (XMLDBException xe) {
+//					xe.printStackTrace();
+//				}
+//			}
 		}
 	}
 	
@@ -173,7 +184,13 @@ public class ExistUnzippedPartStore implements PartStore {
 		Collection col = null;
 		Resource res = null;
 		try { // get the collection
-			col = DatabaseManager.getCollection(URI + docxColl + partPrefix, user, password);
+			col = knownCollections.get(URI + docxColl + partPrefix);
+			if (col==null) {
+				col = DatabaseManager.getCollection(URI + docxColl + partPrefix, user, password);
+				if (col!=null) {
+					knownCollections.put(URI + docxColl + partPrefix, col);
+				}
+			}
 			if (col==null) {
 				return null;
 			}
@@ -216,17 +233,35 @@ public class ExistUnzippedPartStore implements PartStore {
 					xe.printStackTrace();
 				}
 			}
-			if (col != null) {
-				try {
-					col.close();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
+//			if (col != null) {
+//				try {
+//					col.close();
+//				} catch (XMLDBException xe) {
+//					xe.printStackTrace();
+//				}
+//			}
 		}
 		
-		
+		/*
+		 * FIXME: this leaves collections open.  They're all
+		 * closed by finishLoad, but this can be called after that
+		 * (lazy unmarshalling).  How to handle clean-up?
+		 */
 	}
+	
+	public void finishLoad() throws Docx4JException {
+		
+		for(Collection col : knownCollections.values() ) {
+			try {
+				col.close();
+				System.out.println("Closed " + col.getName() );
+			} catch (XMLDBException xe) {
+				xe.printStackTrace();
+			}			
+		}
+		knownCollections.clear();
+	}
+	
 
 	///// Save methods
 	
@@ -477,11 +512,18 @@ public class ExistUnzippedPartStore implements PartStore {
 		
 	}
 	
-	/**
-	 * Does nothing
-	 */
 	public void finishSave() throws Docx4JException {
-		// Nothing to do
+		
+		for(Collection col : knownCollections.values() ) {
+			try {
+				col.close();
+				System.out.println("Closed " + col.getName() );
+			} catch (XMLDBException xe) {
+				xe.printStackTrace();
+			}			
+		}
+		knownCollections.clear();
+		
 	}
 
 	public void setContents(String colString, String id, String type, Object contents) throws XMLDBException {
@@ -495,7 +537,10 @@ public class ExistUnzippedPartStore implements PartStore {
 		Collection col = null;
 		Resource res = null;
 		try {
-			col = getOrCreateCollection(colString);
+			col = knownCollections.get(colString);
+			if (col==null) {
+				col = getOrCreateCollection(colString);
+			}
 
 			//res = (XMLResource) col.createResource(id, type);
 			res = getOrCreateResource( col,  id,  type);
@@ -513,13 +558,13 @@ public class ExistUnzippedPartStore implements PartStore {
 					xe.printStackTrace();
 				}
 			}
-			if (col != null) {
-				try {
-					col.close();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
+//			if (col != null) {
+//				try {
+//					col.close();
+//				} catch (XMLDBException xe) {
+//					xe.printStackTrace();
+//				}
+//			}
 		}
 	}
 
@@ -546,11 +591,20 @@ public class ExistUnzippedPartStore implements PartStore {
 			throws XMLDBException {
 		return getOrCreateCollection(collectionUri, 0);
 	}
+	
 
 	private  Collection getOrCreateCollection(String collectionUri,
 			int pathSegmentOffset) throws XMLDBException {
-		Collection col = DatabaseManager.getCollection(URI + collectionUri, user, password);
-		if (col == null) {
+		
+		Collection col = knownCollections.get(URI + collectionUri);
+		if (col==null) {
+			col = DatabaseManager.getCollection(URI + collectionUri, user, password);
+			if (col != null) { 
+				knownCollections.put(URI + collectionUri, col);			
+			}			
+		} 
+		
+		if (col == null) { 
 			if (collectionUri.startsWith("/")) {
 				collectionUri = collectionUri.substring(1);
 			}
@@ -560,30 +614,44 @@ public class ExistUnzippedPartStore implements PartStore {
 				for (int i = 0; i <= pathSegmentOffset; i++) {
 					path.append("/" + pathSegments[i]);
 				}
-				Collection start = DatabaseManager.getCollection(URI + path);
-				if (start == null) {
+				Collection start = knownCollections.get(URI + path);
+				if (start==null) {
+					start = DatabaseManager.getCollection(URI + path, user, password);
+					if (start != null) { 
+						knownCollections.put(URI + path, start);								
+					}
+				}
+				if (start == null) { 
 					// collection does not exist, so create
 					String parentPath = path
 							.substring(0, path.lastIndexOf("/"));
-					Collection parent = DatabaseManager.getCollection(URI
-							+ parentPath, user, password);
+					
+					Collection parent = knownCollections.get(URI + parentPath);
+					if (parent==null) {
+						 parent = DatabaseManager.getCollection(URI
+								+ parentPath, user, password);
+					}
+					
 					CollectionManagementService mgt = (CollectionManagementService) parent
 							.getService("CollectionManagementService", "1.0");
 					System.out.println("creating " + pathSegments[pathSegmentOffset]);
 					col = mgt.createCollection(pathSegments[pathSegmentOffset]);
-					
+					knownCollections.put(pathSegments[pathSegmentOffset], col);
 					/*
 						2013-01-10 18:44:06,056 [eXistThread-41] ERROR (NativeBroker.java [getOrCreateCollection]:751) - Permission denied to create collection '/db/docxOUT' 
 						2013-01-10 18:44:06,057 [eXistThread-41] DEBUG (RpcConnection.java [handleException]:123) - Account 'guest' not allowed to write to collection '/db' 
 						org.exist.security.PermissionDeniedException: Account 'guest' not allowed to write to collection '/db'
-							at org.exist.storage.NativeBroker.getOrCreateCollection(NativeBroker.java:752)					 
+							at org.exist.storage.NativeBroker.getOrCreateCollection(NativeBroker.java:752)	
+							
+						--> make sure you always get the collection with user/password,
+						    or it will be returned with guest credentials					 
 							*/
 					
 					
-					col.close();
-					parent.close();
+//					col.close();
+//					parent.close();
 				} else {
-					start.close();
+//					start.close();
 				}
 			}
 			return getOrCreateCollection(collectionUri, ++pathSegmentOffset);
