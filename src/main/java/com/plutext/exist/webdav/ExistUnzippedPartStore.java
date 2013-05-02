@@ -19,18 +19,15 @@
  */
 package com.plutext.exist.webdav;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.StringWriter;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
@@ -44,21 +41,11 @@ import org.docx4j.openpackaging.parts.JaxbXmlPart;
 import org.docx4j.openpackaging.parts.Part;
 import org.docx4j.openpackaging.parts.XmlPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.BinaryPart;
-import org.exist.xmldb.EXistResource;
-import org.exist.xmldb.RemoteBinaryResource;
 import org.w3c.dom.Document;
-import org.w3c.dom.Node;
-import org.xmldb.api.DatabaseManager;
-import org.xmldb.api.base.Collection;
-import org.xmldb.api.base.Database;
-import org.xmldb.api.base.Resource;
-import org.xmldb.api.base.XMLDBException;
-import org.xmldb.api.modules.CollectionManagementService;
-import org.xmldb.api.modules.XMLResource;
 
-import com.googlecode.sardine.DavResource;
-import com.googlecode.sardine.Sardine;
-import com.googlecode.sardine.SardineFactory;
+import com.github.sardine.Sardine;
+import com.github.sardine.SardineFactory;
+import com.github.sardine.impl.SardineException;
 
 /**
  * TODO: use WebDAV for the save part
@@ -106,6 +93,7 @@ public class ExistUnzippedPartStore implements PartStore {
 
 	public boolean partExists(String partName) throws Docx4JException {
 		
+		System.out.println("partname (incoming):" + partName);
 		String partPrefix="";
 		String resource; 
 		int pos = partName.lastIndexOf("/");
@@ -119,7 +107,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		//String urlEncoded = URLEncoder.encode(URI + docxColl + partPrefix);
 		System.out.println(resource);
 		
-		String url = URI + docxColl + partPrefix + "/" + URLEncoder.encode(partName);
+		String url = URI + docxColl + partPrefix + "/" + URLEncoder.encode(resource);
 //		String url = URI + docxColl + partPrefix + "/" + partName;
 		System.out.println(url);
 				
@@ -157,7 +145,7 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(url);
 		try { 			
 			return sardine.get(url);
-		} catch (com.googlecode.sardine.impl.SardineException e) {
+		} catch (SardineException e) {
 			if (e.getStatusCode()==404) {
 				return null;
 			} else {
@@ -190,15 +178,34 @@ public class ExistUnzippedPartStore implements PartStore {
 			ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
 	        ctm.marshal(baos);
 	        
-	        setContents(docxColl, 
-	        		URLEncoder.encode("[Content_Types].xml"), 
-	        		"XMLResource", 
-	        		baos.toString() );	        
+	        // Double-encode to work around a bug in eXist
+	        String url = URI + docxColl + "/" 
+	        		+ URLEncoder.encode(
+	        				URLEncoder.encode("[Content_Types].xml"));
+	        System.out.println(url);
+			sardine.put(url, baos.toByteArray());
 	        
 		} catch (Exception e) {
 			throw new Docx4JException("Error marshalling Content_Types ", e);
 		}
 	
+	}
+	
+	/**
+	 * Keep a record of directories we've created, so we don't
+	 * have to check whether it exists via HEAD request, nor
+	 * risk a 405 by doing MKCOL when it already exists. 
+	 */
+	private List<String> dirsMade = new ArrayList<String>();
+	
+	public void ensureCollection(String url) throws IOException {
+		
+		if (dirsMade.contains(url)) {
+			return;
+		} else {
+			sardine.createDirectory(url);
+			dirsMade.add(url);
+		}
 	}
 	
 	public void saveJaxbXmlPart(JaxbXmlPart part) throws Docx4JException {
@@ -222,18 +229,18 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(docxColl + partPrefix);
 		System.out.println(resource);
 		
+		
 		try {
-
+			// Ensure partPrefix collection exists
+			ensureCollection(URI + docxColl + partPrefix);
 
 			if (part.isUnmarshalled() ) {
 			
 				ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
 		        part.marshal(baos);
 
-		        setContents(docxColl + partPrefix, 
-		        		URLEncoder.encode(resource), 
-		        		"XMLResource", 
-		        		baos.toString() );	        
+//		        		URLEncoder.encode(resource), 
+				sardine.put(URI + docxColl + partPrefix + "/" + resource, baos.toByteArray());
 		        
 	        } else {
 
@@ -254,10 +261,7 @@ public class ExistUnzippedPartStore implements PartStore {
 	        	 
 	        		is.close();
 	        		
-			        setContents(docxColl + partPrefix, 
-			        		URLEncoder.encode(resource), 
-			        		"XMLResource", 
-			        		baos.toString() );	        
+					sardine.put(URI + docxColl + partPrefix  + "/" + resource, baos.toByteArray());
 	        	 	        		
 	        	}
 	        	
@@ -285,15 +289,13 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(resource);
 		
 		try {
+			// Ensure partPrefix collection exists
+			ensureCollection(URI + docxColl + partPrefix);			
 			
 			ByteArrayOutputStream baos = new ByteArrayOutputStream(); 
 	        part.getData().writeDocument( baos );
 
-	        setContents(docxColl + partPrefix, 
-	        		URLEncoder.encode(resource), 
-	        		"XMLResource", 
-	        		baos.toString() );	        
-		        
+			sardine.put(URI + docxColl + partPrefix  + "/" + resource, baos.toByteArray());
 	        	        
 		} catch (Exception e) {
 			throw new Docx4JException("Error marshalling JaxbXmlPart " + part.getPartName(), e);
@@ -317,6 +319,8 @@ public class ExistUnzippedPartStore implements PartStore {
 		System.out.println(resource);
 		
 		try {
+			// Ensure partPrefix collection exists
+			ensureCollection(URI + docxColl + partPrefix);
 
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
 			Document doc = part.getDocument();
@@ -338,8 +342,7 @@ public class ExistUnzippedPartStore implements PartStore {
 			XmlUtils.getTransformerFactory().newTransformer()
 					.transform(source, new StreamResult(baos));
 
-			setContents(docxColl + partPrefix,
-					URLEncoder.encode(resource), "XMLResource", baos.toString());
+			sardine.put(URI + docxColl + partPrefix  + "/" + resource, baos.toByteArray());
 
 		} catch (Exception e) {
 			throw new Docx4JException("Error marshalling JaxbXmlPart "
@@ -366,6 +369,8 @@ public class ExistUnzippedPartStore implements PartStore {
 		
 
 		try {
+			// Ensure partPrefix collection exists
+			ensureCollection(URI + docxColl + partPrefix);
 	        	        
 	        if (((BinaryPart)part).isLoaded() ) {
 			
@@ -373,11 +378,8 @@ public class ExistUnzippedPartStore implements PartStore {
 	            byte[] bytes = null;
 	            bytes = new byte[bb.limit()];
 	            bb.get(bytes);	        
-		        
-		        setContents(docxColl + partPrefix, 
-		        		URLEncoder.encode(resource), 
-		        		"BinaryResource", 
-		        		bytes, part.getContentType() );	        
+
+				sardine.put(URI + docxColl + partPrefix  + "/" + resource, bytes, part.getContentType() );	        
 		        
 	        } else {
 		        
@@ -404,9 +406,7 @@ public class ExistUnzippedPartStore implements PartStore {
 	        		}
 	        		is.close();
 	        		
-			        setContents(docxColl + partPrefix, 
-			        		URLEncoder.encode(resource), 
-			        		"BinaryResource", 
+					sardine.put(URI + docxColl + partPrefix  + "/" + resource,       
 			        		baos.toByteArray(), part.getContentType() );	        
 
 	        	}
@@ -428,111 +428,5 @@ public class ExistUnzippedPartStore implements PartStore {
 		// Nothing to do
 	}
 
-	public void setContents(String colString, String id, String type, Object contents) throws XMLDBException {
-		setContents( colString,  id,  type,  contents, null);
-	}
 	
-	public void setContents(String colString, String id, String type, Object contents, String mimetype) throws XMLDBException {
-		
-		// type eg "XMLResource"
-		
-		Collection col = null;
-		Resource res = null;
-		try {
-			col = getOrCreateCollection(colString);
-
-			//res = (XMLResource) col.createResource(id, type);
-			res = getOrCreateResource( col,  id,  type);
-			res.setContent(contents);
-			if (type.equals("BinaryResource")) {
-				((RemoteBinaryResource)res).setMimeType(mimetype);
-			}
-			col.storeResource(res);
-			
-		} finally { // dont forget to cleanup
-			if (res != null) {
-				try {
-					((EXistResource) res).freeResources();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
-			if (col != null) {
-				try {
-					col.close();
-				} catch (XMLDBException xe) {
-					xe.printStackTrace();
-				}
-			}
-		}
-	}
-
-	private  Resource getOrCreateResource(Collection col, String id, String type)
-			throws XMLDBException {
-		
-		Resource res = null;
-		try { // get the collection
-			res = col.getResource(id);
-			
-			if (res != null) {
-				return res;
-			} else {
-				return col.createResource(id, type);
-			}
-		} catch (XMLDBException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return null;
-		} 
-	}
-	
-	private  Collection getOrCreateCollection(String collectionUri)
-			throws XMLDBException {
-		return getOrCreateCollection(collectionUri, 0);
-	}
-
-	private  Collection getOrCreateCollection(String collectionUri,
-			int pathSegmentOffset) throws XMLDBException {
-		Collection col = DatabaseManager.getCollection(URI + collectionUri, user, password);
-		if (col == null) {
-			if (collectionUri.startsWith("/")) {
-				collectionUri = collectionUri.substring(1);
-			}
-			String pathSegments[] = collectionUri.split("/");
-			if (pathSegments.length > 0) {
-				StringBuilder path = new StringBuilder();
-				for (int i = 0; i <= pathSegmentOffset; i++) {
-					path.append("/" + pathSegments[i]);
-				}
-				Collection start = DatabaseManager.getCollection(URI + path);
-				if (start == null) {
-					// collection does not exist, so create
-					String parentPath = path
-							.substring(0, path.lastIndexOf("/"));
-					Collection parent = DatabaseManager.getCollection(URI
-							+ parentPath, user, password);
-					CollectionManagementService mgt = (CollectionManagementService) parent
-							.getService("CollectionManagementService", "1.0");
-					System.out.println("creating " + pathSegments[pathSegmentOffset]);
-					col = mgt.createCollection(pathSegments[pathSegmentOffset]);
-					
-					/*
-						2013-01-10 18:44:06,056 [eXistThread-41] ERROR (NativeBroker.java [getOrCreateCollection]:751) - Permission denied to create collection '/db/docxOUT' 
-						2013-01-10 18:44:06,057 [eXistThread-41] DEBUG (RpcConnection.java [handleException]:123) - Account 'guest' not allowed to write to collection '/db' 
-						org.exist.security.PermissionDeniedException: Account 'guest' not allowed to write to collection '/db'
-							at org.exist.storage.NativeBroker.getOrCreateCollection(NativeBroker.java:752)					 
-							*/
-					
-					
-					col.close();
-					parent.close();
-				} else {
-					start.close();
-				}
-			}
-			return getOrCreateCollection(collectionUri, ++pathSegmentOffset);
-		} else {
-			return col;
-		}
-	}
 }
